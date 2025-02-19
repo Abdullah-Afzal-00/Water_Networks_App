@@ -5,6 +5,145 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Circle
 
 
+def create_network_matrices(nodes, pipes):
+    """Create matrices with proper K dimension alignment"""
+    # Calculate components
+    non_pumped = sum(1 for p in pipes if not p['has_pump'])
+    pumped = len(pipes) - non_pumped
+    junctions = sum(1 for n in nodes if n['type'] == 'junction')
+    reservoirs = sum(1 for n in nodes if n['type'] == 'reservoir')
+    tanks = sum(1 for n in nodes if n['type'] == 'tank')
+
+    # Calculate matrix dimension using original formula
+    K = (len(pipes) + 2 * non_pumped + junctions + reservoirs + tanks)
+
+    # Initialize E matrix
+    E = [[0] * K for _ in range(K)]
+
+    # Set diagonals for non-pumped pipes
+    for i in range(non_pumped):
+        E[i][i] = 1
+
+    # Set diagonals for tanks (bottom rows)
+    tank_start = K - tanks
+    for i in range(tank_start, K):
+        E[i][i] = 1
+
+    # Initialize A matrix with empty strings
+    A = [['0'] * K for _ in range(K)]
+
+    # Add coefficients for non-pumped pipes (2 per pipe)
+    for i in range(non_pumped):
+        # Pipe left coefficient (c1, c3, ...)
+        A[i][non_pumped + pumped + i] = f'c{i + 1}'
+        # # Pipe right coefficient (c2, c4, ...)
+        A[i][(2*non_pumped )+ pumped+  i] = f'-c{i + 1}'
+
+        # A[2 * i + 1][2 * i + 1] = f'-c{2 * i + 2}'
+
+    return {
+        'A_matrix': A,
+        'E_matrix': E,
+        'components': {
+            'non_pumped': non_pumped,
+            'pumped': pumped,
+            'junctions': junctions,
+            'reservoirs': reservoirs,
+            'tanks': tanks
+        },
+        'K_dimension': K
+    }
+
+def display_e_matrix(E, components):
+    """Display matrix with complete flow labels"""
+    labels = []
+
+    # 1. Flow from all pipes
+    for i in range(components['non_pumped']):
+        labels.append(f"PipeFlow_{i + 1}")
+
+    # 2. Flow from Pumped pipes
+    for i in range(components['pumped']):
+        labels.append(f"PumpedFlow_{i + 1}")
+
+    # 3. Non-pumped pipes (2 labels per pipe)
+    for i in range(components['non_pumped']):
+        labels.append(f"Pipe_{i + 1}_L")
+        labels.append(f"Pipe_{i + 1}_R")
+
+    # 4. Junctions
+    labels += [f"Junction_{i + 1}" for i in range(components['junctions'])]
+
+    # 5. Reservoirs
+    labels += [f"Reservoir_{i + 1}" for i in range(components['reservoirs'])]
+
+    # 6. Tanks (last rows)
+    labels += [f"Tank_{i + 1}" for i in range(components['tanks'])]
+
+    # Verify label count matches matrix dimension
+    assert len(labels) == len(E), f"Labels: {len(labels)} vs Matrix: {len(E)}"
+
+    # Build matrix display
+    matrix_str = f"Matrix Dimension: {len(E)}x{len(E[0])}\n\n"
+    header = "Row Label".ljust(20) + " ".join(f"{label:<10}" for label in labels)
+    matrix_str += header + "\n"
+
+    for row_idx, row in enumerate(E):
+        matrix_str += f"{labels[row_idx]:<20}"
+        matrix_str += " ".join(f"{'[1]' if x else ' 0 '}" for x in row)
+        matrix_str += "\n"
+
+    return matrix_str
+
+def display_A_matrix(A, components):
+    """Display A matrix with correct labels matching K dimension"""
+    labels = []
+
+    # 1. Flow Non-pumped pipes
+    for i in range(components['non_pumped']):
+        labels.append(f"Pipe_{i + 1}_Flow")
+
+    # 2. Flow pumped pipes
+    for i in range(components['pumped']):
+        labels.append(f"Pumped_{i + 1}_Flow")
+
+
+    # 3. Non-pumped pipes Left
+    for i in range(components['non_pumped']):
+        labels.append(f"Pipe_{i + 1}_L")
+
+    # 4. Non-pumped pipes Right
+    for i in range(components['non_pumped']):
+        labels.append(f"Pipe_{i + 1}_R")
+
+    # 5. Junctions
+    labels += [f"Junction_{i + 1}" for i in range(components['junctions'])]
+
+    # 6. Reservoirs
+    labels += [f"Reservoir_{i + 1}" for i in range(components['reservoirs'])]
+
+    # 7. Tanks (last rows)
+    labels += [f"Tank_{i + 1}" for i in range(components['tanks'])]
+
+    # Verify label count matches matrix dimension
+    assert len(labels) == len(A), (
+        f"Label count ({len(labels)}) ≠ matrix dimension ({len(A)})"
+        f"\nComponents: {components}"
+    )
+
+    # Build matrix display
+    matrix_str = f"A Matrix Dimension: {len(A)}x{len(A[0])}\n\n"
+    header = "Row Label".ljust(20) + " ".join(f"{label:<10}" for label in labels)
+    matrix_str += header + "\n"
+
+    for row_idx, row in enumerate(A):
+        matrix_str += f"{labels[row_idx]:<20}"
+        matrix_str += " ".join(f"{val:<10}" for val in row)
+        matrix_str += "\n"
+
+    return matrix_str
+
+
 def visualize_graph():
     G = nx.Graph()
     node_colors = {
@@ -60,85 +199,7 @@ def visualize_graph():
     ax.legend(handles=legend_elements, loc='upper right')
     plt.title("Water Network Graph")
     st.pyplot(fig)
-
-
-def create_network_matrices(nodes, pipes):
-    """Create matrices with all pipe flows labeled correctly"""
-    # Calculate components
-    non_pumped = sum(1 for p in pipes if not p['has_pump'])
-    pumped = len(pipes) - non_pumped
-    junctions = sum(1 for n in nodes if n['type'] == 'junction')
-    reservoirs = sum(1 for n in nodes if n['type'] == 'reservoir')
-    tanks = sum(1 for n in nodes if n['type'] == 'tank')
-
-    # Calculate matrix dimension using original formula
-    K = (len(pipes) + 2 * non_pumped + junctions + reservoirs + tanks)
-
-    # Initialize E matrix
-    E = [[0] * K for _ in range(K)]
-
-    # Set diagonals for non-pumped pipes
-    for i in range(non_pumped):
-        E[i][i] = 1
-
-    # Set diagonals for tanks (bottom rows)
-    tank_start = K - tanks
-    for i in range(tank_start, K):
-        E[i][i] = 1
-
-    return {
-        'E_matrix': E,
-        'components': {
-            'non_pumped': non_pumped,
-            'pumped': pumped,
-            'junctions': junctions,
-            'reservoirs': reservoirs,
-            'tanks': tanks
-        },
-        'K_dimension': K
-    }
-
-
-def display_e_matrix(E, components):
-    """Display matrix with complete flow labels"""
-    labels = []
-
-    # 1. Flow from all pipes
-    for i in range(components['non_pumped']):
-        labels.append(f"PipeFlow_{i + 1}")
-
-    # 2. Flow from Pumped pipes
-    for i in range(components['pumped']):
-        labels.append(f"PumpedFlow_{i + 1}")
-
-    # 3. Non-pumped pipes (2 labels per pipe)
-    for i in range(components['non_pumped']):
-        labels.append(f"Pipe_{i + 1}_L")
-        labels.append(f"Pipe_{i + 1}_R")
-
-    # 4. Junctions
-    labels += [f"Junction_{i + 1}" for i in range(components['junctions'])]
-
-    # 5. Reservoirs
-    labels += [f"Reservoir_{i + 1}" for i in range(components['reservoirs'])]
-
-    # 6. Tanks (last rows)
-    labels += [f"Tank_{i + 1}" for i in range(components['tanks'])]
-
-    # Verify label count matches matrix dimension
-    assert len(labels) == len(E), f"Labels: {len(labels)} vs Matrix: {len(E)}"
-
-    # Build matrix display
-    matrix_str = f"Matrix Dimension: {len(E)}x{len(E[0])}\n\n"
-    header = "Row Label".ljust(20) + " ".join(f"{label:<10}" for label in labels)
-    matrix_str += header + "\n"
-
-    for row_idx, row in enumerate(E):
-        matrix_str += f"{labels[row_idx]:<20}"
-        matrix_str += " ".join(f"{'[1]' if x else ' 0 '}" for x in row)
-        matrix_str += "\n"
-
-    return matrix_str
+# Add to main() function
 def main():
     st.title("Water Network Builder 🌊")
 
@@ -238,8 +299,9 @@ def main():
             st.pyplot(fig)
 
             st.write("Network Parameters:", matrices['components'])
-            # st.write("First 10 rows of E matrix:")
             st.write(pd.DataFrame(matrices['E_matrix']))
+
+
 
     with st.expander("🧮 Network Matrices Detailed"):
         if st.session_state.nodes and st.session_state.pipes:
@@ -260,16 +322,33 @@ def main():
             latex_str += r"\end{bmatrix}"
             st.latex(latex_str)
 
-    # # Optional: Add LaTeX rendering
-    # with st.expander("View as Rendered LaTeX"):
-    #     st.latex(display_e_matrix(matrices['E_matrix']))
-    #
-    #     # Add download option for large matrices
-    #     st.download_button(
-    #         label="Download E Matrix as Text",
-    #         data="\n".join(["\t".join(map(str, row)) for row in matrices['E_matrix']]),
-    #         file_name="E_matrix.txt"
-    #     )
+    with st.expander("🧮 A Matrix"):
+        if st.session_state.nodes and st.session_state.pipes:
+            matrices = create_network_matrices(st.session_state.nodes, st.session_state.pipes)
+
+            st.subheader("A Matrix Structure")
+            st.write(f"Matrix Dimension (K x K): {matrices['K_dimension']} x {matrices['K_dimension']}")
+
+            # Visualize A matrix pattern
+            fig, ax = plt.subplots(figsize=(8, 8))
+            numeric_A = [[1 if cell != '0' else 0 for cell in row] for row in matrices['A_matrix']]
+            ax.imshow(numeric_A, cmap='binary')
+            ax.set_title("A Matrix Pattern (Coefficient=1, 0=inactive)")
+            st.pyplot(fig)
+
+            st.subheader("Detailed A Matrix")
+            st.text(display_A_matrix(matrices['A_matrix'], matrices['components']))
+
+            # LaTeX version
+            latex_str = r"\begin{bmatrix}"
+            for row in matrices['A_matrix']:
+                latex_str += " & ".join(row) + r" \\ "
+            latex_str += r"\end{bmatrix}"
+            st.latex(latex_str)
+
+            st.write("Network Parameters:", matrices['components'])
+            st.write(pd.DataFrame(matrices['A_matrix']))
+
 
 
 if __name__ == "__main__":
