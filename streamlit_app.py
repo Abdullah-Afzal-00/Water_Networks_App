@@ -77,8 +77,8 @@ def create_network_matrices(nodes, pipes):
     # Initialize E matrix
     E = [[0] * K for _ in range(K)]
 
-    # Set diagonals for non-pumped pipes (2 per pipe)
-    for i in range(2 * non_pumped):
+    # Set diagonals for non-pumped pipes
+    for i in range(non_pumped):
         E[i][i] = 1
 
     # Set diagonals for tanks (bottom rows)
@@ -105,7 +105,7 @@ def display_e_matrix(E, components):
 
     # 1. Flow from all pipes
     for i in range(components['non_pumped']):
-        labels.append(f"PipeFlow_{i + 1}_L")
+        labels.append(f"PipeFlow_{i + 1}")
 
     # 2. Flow from Pumped pipes
     for i in range(components['pumped']):
