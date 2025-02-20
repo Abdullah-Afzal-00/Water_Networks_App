@@ -208,6 +208,17 @@ def create_network_matrices(nodes, pipes):
                     A[(3 * non_pumped) + pumped + (junction_number - 1)][ pipe_number - 1] = "1"
 
 
+    #Add 1s for Reservoirs
+    for i in range(reservoirs):
+        A[3*non_pumped + pumped + junctions + i][3*non_pumped + pumped + junctions + i] = '1'
+
+    # Add 1s for Tanks
+    for pipe in pipes:
+        if pipe['start'][0] == 'T':
+            tank_number = int(pipe['start'][1:])
+            pipe_number = int(pipe['id'][1:])
+            A[3 * non_pumped + pumped + junctions + reservoirs + (tank_number - 1)][pipe_number - 1] = '1'
+
 
     return {
         'A_matrix': A,
