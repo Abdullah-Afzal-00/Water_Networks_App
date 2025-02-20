@@ -136,6 +136,33 @@ def create_network_matrices(nodes, pipes):
         A[non_pumped + pumped + i][i] = f'1-s{i+1}'
         A[non_pumped + pumped + i][(2*non_pumped) + pumped + i] = f's{i+1}'
 
+        # Add coeffecients for pipe end Sides connections
+        if pipes[i]['end'][0] == 'J':
+            junction_number = int(pipes[i]['end'][1:])
+            A[non_pumped + pumped + i][(3 * non_pumped) + pumped + i + (junction_number - 1)] = f'-s{i + 1}'
+        if pipes[i]['end'][0] == 'R':
+            reservoir_number = int(pipes[i]['end'][1:])
+            A[non_pumped + pumped + i][(3 * non_pumped) + pumped + i + junctions +(reservoir_number - 1)] = f'-s{i + 1}'
+        if pipes[i]['end'][0] == 'T':
+            tank_number = int(pipes[i]['end'][1:])
+            A[non_pumped + pumped + i][(3 * non_pumped) + pumped + i + junctions + reservoirs + (tank_number - 1)] = f'-s{i + 1}'
+
+
+    # Add coefficients for pipe start Sides
+    for i in range(non_pumped):
+        A[2*non_pumped + pumped + i][non_pumped + pumped + i] = "1"
+
+        # Add coeffecients for pipe end Sides connections
+        if pipes[i]['end'][0] == 'J':
+            junction_number = int(pipes[i]['end'][1:])
+            A[2*non_pumped + pumped + i][(3 * non_pumped) + pumped + i + (junction_number - 1)] = "-1"
+        if pipes[i]['end'][0] == 'R':
+            reservoir_number = int(pipes[i]['end'][1:])
+            A[2*non_pumped + pumped + i][(3 * non_pumped) + pumped + i + junctions + (reservoir_number - 1)] = "-1"
+        if pipes[i]['end'][0] == 'T':
+            tank_number = int(pipes[i]['end'][1:])
+            A[2*non_pumped + pumped + i][(3 * non_pumped) + pumped + i + junctions + reservoirs + (tank_number - 1)] = "-1"
+
 
 
 
