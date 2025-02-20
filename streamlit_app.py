@@ -139,7 +139,6 @@ def create_network_matrices(nodes, pipes):
 
         if pipes[non_pumped + i]['start'][0] == 'J':
             junction_number = int(pipes[non_pumped + i]['start'][1:])
-            print((3 * non_pumped) + pumped + (junction_number - 1))
             A[non_pumped + i][(3 * non_pumped) + pumped + (junction_number - 1)] = f'-s{non_pumped + i + 1}'
         if pipes[non_pumped + i]['start'][0] == 'R':
             reservoir_number = int(pipes[non_pumped + i]['start'][1:])
