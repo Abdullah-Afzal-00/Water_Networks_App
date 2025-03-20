@@ -112,9 +112,13 @@ def create_network_matrices(nodes, pipes):
     # Initialize E matrix
     E = [[0] * K for _ in range(K)]
 
+    #Initialize G matrix
+    G = ['0'] * K
+
     # Set diagonals for non-pumped pipes
     for i in range(non_pumped):
         E[i][i] = 1
+        G[i] = f'-C_aQ{i + 1}|Q{i + 1}|'
 
     # Set diagonals for tanks (bottom rows)
     tank_start = K - tanks
@@ -138,6 +142,9 @@ def create_network_matrices(nodes, pipes):
     for i in range(pumped):
         A[non_pumped + i][non_pumped + i] = f'1-s{non_pumped + i + 1}'
         # A[non_pumped + i][(3 * non_pumped) + pumped + i] = f's{non_pumped + i + 1}'
+
+        # For G matrix
+        G[non_pumped + i] = '-S_puG_pu(Q_pu)'
 
 
         if pipes[non_pumped + i]['start'][0] == 'J':
@@ -217,7 +224,7 @@ def create_network_matrices(nodes, pipes):
         A[reservoir_idx][reservoir_idx] = '1'
 
         # Add corresponding P constant to F matrix
-        F[reservoir_idx] = f'P_{chr(97 + i)}'  # P_a, P_b, etc.
+        F[reservoir_idx] = f'-P_{chr(97 + i)}'  # P_a, P_b, etc.
 
     # Add 1s for Tanks
     for pipe in pipes:
@@ -233,6 +240,7 @@ def create_network_matrices(nodes, pipes):
         'A_matrix': A,
         'E_matrix': E,
         'F_matrix': F,
+        'G_matrix': G,
         'components': {
             'non_pumped': non_pumped,
             'pumped': pumped,
@@ -352,6 +360,26 @@ def display_F_matrix(F, components):
         matrix_str += f"{labels[row_idx]:<20} {value}\n"
 
     return matrix_str
+
+def display_G_matrix(G, components):
+    """Display G matrix with reservoir constants"""
+    labels = []
+
+    labels += [f"PipeFlow_{i + 1}" for i in range(components['non_pumped'])]
+    labels += [f"PumpedFlow_{i + 1}" for i in range(components['pumped'])]
+    for i in range(components['non_pumped']):
+        labels += [f"Pipe_{i + 1}_L", f"Pipe_{i + 1}_R"]
+    labels += [f"Junction_{i + 1}" for i in range(components['junctions'])]
+    labels += [f"Reservoir_{i + 1}" for i in range(components['reservoirs'])]
+    labels += [f"Tank_{i + 1}" for i in range(components['tanks'])]
+
+    #Build matrix display
+    matrix_str = f"G Matrix Dimension: {len(G)}x1\n\n"
+    for row_idx, value in enumerate(G):
+        matrix_str += f"{labels[row_idx]:<20} {value}\n"
+
+    return matrix_str
+
 def visualize_graph():
     G = nx.Graph()
     node_colors = {
@@ -539,6 +567,24 @@ def main():
             # Add LaTeX for F matrix
             latex_str = r"\begin{bmatrix}"
             latex_str += r" \\ ".join(matrices['F_matrix'])
+            latex_str += r"\end{bmatrix}"
+            st.latex(latex_str)
+
+    with st.expander("🧮 G Matrix"):
+        if st.session_state.nodes and st.session_state.pipes:
+            matrices = create_network_matrices(st.session_state.nodes, st.session_state.pipes)
+
+            # Add G matrix display
+            st.subheader("G Matrix Structure")
+            st.write(f"Matrix Dimension (K x 1): {matrices['K_dimension']} x 1")
+            st.text(display_G_matrix(matrices['G_matrix'], matrices['components']))
+
+            # Correct subscript
+            matrices['G_matrix'] = [x.replace('pu', r'{\text{pu}}') for x in matrices['G_matrix']]
+
+            # Add LaTeX for G matrix
+            latex_str = r"\begin{bmatrix}"
+            latex_str += r" \\ ".join(matrices['G_matrix'])
             latex_str += r"\end{bmatrix}"
             st.latex(latex_str)
 
