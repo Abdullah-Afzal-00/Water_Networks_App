@@ -498,6 +498,10 @@ def main():
             st.write("Network Parameters:", matrices['components'])
             st.write(pd.DataFrame(matrices['A_matrix']))
 
+    #Add footer text
+    st.markdown("---")
+    st.write("© 2025 Streamlit Water Network Demo | [GitHub Repository](Abdullah-Afzal-00/Water_Networks_App)")
+    st.write("Built by [Abdullah Afzal](https://github.com/Abdullah-Afzal-00/)")
 
 
 if __name__ == "__main__":
