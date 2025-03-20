@@ -121,6 +121,9 @@ def create_network_matrices(nodes, pipes):
     for i in range(tank_start, K):
         E[i][i] = 1
 
+    #Initialize F matrix
+    F = ['0'] * K
+
     # Initialize A matrix with empty strings
     A = [['0'] * K for _ in range(K)]
 
@@ -210,7 +213,11 @@ def create_network_matrices(nodes, pipes):
 
     #Add 1s for Reservoirs
     for i in range(reservoirs):
-        A[3*non_pumped + pumped + junctions + i][3*non_pumped + pumped + junctions + i] = '1'
+        reservoir_idx = 3*non_pumped + pumped + junctions + i
+        A[reservoir_idx][reservoir_idx] = '1'
+
+        # Add corresponding P constant to F matrix
+        F[reservoir_idx] = f'P_{chr(97 + i)}'  # P_a, P_b, etc.
 
     # Add 1s for Tanks
     for pipe in pipes:
@@ -220,9 +227,12 @@ def create_network_matrices(nodes, pipes):
             A[3 * non_pumped + pumped + junctions + reservoirs + (tank_number - 1)][pipe_number - 1] = '1'
 
 
+
+
     return {
         'A_matrix': A,
         'E_matrix': E,
+        'F_matrix': F,
         'components': {
             'non_pumped': non_pumped,
             'pumped': pumped,
@@ -323,6 +333,25 @@ def display_A_matrix(A, components):
     return matrix_str
 
 
+def display_F_matrix(F, components):
+    """Display F matrix with reservoir constants"""
+    labels = []
+
+    # Generate labels using same logic as E matrix
+    labels += [f"PipeFlow_{i + 1}" for i in range(components['non_pumped'])]
+    labels += [f"PumpedFlow_{i + 1}" for i in range(components['pumped'])]
+    for i in range(components['non_pumped']):
+        labels += [f"Pipe_{i + 1}_L", f"Pipe_{i + 1}_R"]
+    labels += [f"Junction_{i + 1}" for i in range(components['junctions'])]
+    labels += [f"Reservoir_{i + 1}" for i in range(components['reservoirs'])]
+    labels += [f"Tank_{i + 1}" for i in range(components['tanks'])]
+
+    # Build matrix display
+    matrix_str = f"F Matrix Dimension: {len(F)}x1\n\n"
+    for row_idx, value in enumerate(F):
+        matrix_str += f"{labels[row_idx]:<20} {value}\n"
+
+    return matrix_str
 def visualize_graph():
     G = nx.Graph()
     node_colors = {
@@ -497,6 +526,21 @@ def main():
 
             st.write("Network Parameters:", matrices['components'])
             st.write(pd.DataFrame(matrices['A_matrix']))
+
+    with st.expander("🧮 F Matrix"):
+        if st.session_state.nodes and st.session_state.pipes:
+            matrices = create_network_matrices(st.session_state.nodes, st.session_state.pipes)
+
+            # Add F matrix display
+            st.subheader("F Matrix Structure")
+            st.write(f"Matrix Dimension (K x 1): {matrices['K_dimension']} x 1")
+            st.text(display_F_matrix(matrices['F_matrix'], matrices['components']))
+
+            # Add LaTeX for F matrix
+            latex_str = r"\begin{bmatrix}"
+            latex_str += r" \\ ".join(matrices['F_matrix'])
+            latex_str += r"\end{bmatrix}"
+            st.latex(latex_str)
 
     #Add footer text
     st.markdown("---")
