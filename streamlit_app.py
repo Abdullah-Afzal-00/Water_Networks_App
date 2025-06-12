@@ -121,9 +121,9 @@ def create_network_matrices(nodes, pipes):
         G[i] = f'-C_aQ{i + 1}|Q{i + 1}|'
 
     # Set diagonals for tanks (bottom rows)
-    # tank_start = K - tanks
-    # for i in range(tank_start, K):
-    #     E[i][i] = 1
+    tank_start = K - tanks
+    for i in range(tank_start, K):
+        E[i][i] = 1
 
     #Initialize F matrix
     F = ['0'] * K
