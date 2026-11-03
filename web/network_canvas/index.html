@@ -421,6 +421,9 @@
   });
 
   canvas.addEventListener("wheel", function (event) {
+    // Plain wheel scrolls the page; Ctrl/Cmd + wheel (and trackpad pinch,
+    // which browsers report as Ctrl + wheel) zooms the network.
+    if (!event.ctrlKey && !event.metaKey) return;
     event.preventDefault();
     var rect = canvas.getBoundingClientRect();
     var sx = event.clientX - rect.left;

@@ -181,7 +181,7 @@ def render_network() -> None:
 
     st.caption(
         "Drag a node to move it. Select a pipe and drag the round handle to bend it; "
-        "double-click the handle to straighten it. Drag empty background to pan, and use the wheel to zoom."
+        "double-click the handle to straighten it. Drag empty background to pan. Hold Ctrl (⌘ on Mac) and scroll, or pinch, to zoom."
     )
     button_row = st.columns(2)
     if button_row[0].button("Re-layout", key="relayout"):
