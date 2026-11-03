@@ -820,13 +820,21 @@ def _comparison_figure(result, labels: List[str], kind: str, show_impulses: bool
         axis.plot(time_ep, value_ep, color="#E07A3D", lw=1.3, ls="--", label="EPANET")
         for instant, before, after in jumps:
             axis.plot([instant, instant], [before, after], color="#0B6E99", lw=1.0)
+        # Arrow length is half the axis height, as in the desktop plot. Sizing
+        # it by the coefficient pushed it far outside the axes, and the tight
+        # bounding box then stretched the image into a tall blank strip.
+        low, high = axis.get_ylim()
+        height = 0.5 * ((high - low) if abs(high - low) > 1e-9 else 1.0)
         for instant, coefficient, base in arrows.get(label, []):
+            tip = base + np.sign(coefficient or 1.0) * height
             axis.annotate(
                 "",
-                xy=(instant, base),
-                xytext=(instant, base + np.sign(coefficient or 1.0) * max(abs(coefficient), 1e-3)),
-                arrowprops={"arrowstyle": "-|>", "color": "#6B3FA0"},
+                xy=(instant, tip),
+                xytext=(instant, base),
+                arrowprops={"arrowstyle": "-|>", "color": "#6B3FA0", "lw": 1.6},
             )
+            low, high = min(low, tip), max(high, tip)
+        axis.set_ylim(low, high)
         axis.set_ylabel(label, fontsize=8)
         axis.grid(True, alpha=0.3)
         axis.legend(loc="best", fontsize=8)
