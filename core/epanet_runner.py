@@ -119,14 +119,15 @@ def get_epanet_dll_path() -> str:
     Windows keeps looking for ``epanet2.dll`` in the bundled ``core/lib``
     folder and in a PyInstaller build. Other platforms, and a Windows
     install that did not vendor the DLL, also search the ``epyt`` package.
+    Only the library name for this OS is searched: the vendored Windows DLL
+    must never be picked up on Linux (e.g. Streamlit Cloud), where loading
+    it fails with ``OSError: invalid ELF header``.
     """
     filename = _epanet_library_filename()
     candidates: list[str] = []
 
     meipass = getattr(sys, "_MEIPASS", None)
     if meipass:
-        candidates.append(os.path.join(meipass, "core", "lib", "epanet2.dll"))
-        candidates.append(os.path.join(meipass, "epanet2.dll"))
         candidates.append(os.path.join(meipass, "core", "lib", filename))
         candidates.append(os.path.join(meipass, filename))
 
@@ -137,13 +138,10 @@ def get_epanet_dll_path() -> str:
         os.path.join(exe_dir, "core", "lib"),
         exe_dir,
     ):
-        candidates.append(os.path.join(folder, "epanet2.dll"))
         candidates.append(os.path.join(folder, filename))
 
     base_dir = os.path.dirname(os.path.abspath(__file__))
-    candidates.append(os.path.join(base_dir, "lib", "epanet2.dll"))
     candidates.append(os.path.join(base_dir, "lib", filename))
-    candidates.append(os.path.abspath(os.path.join("core", "lib", "epanet2.dll")))
     candidates.append(os.path.abspath(os.path.join("core", "lib", filename)))
     candidates.extend(_epyt_library_candidates(filename))
 
