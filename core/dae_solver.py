@@ -349,12 +349,13 @@ def analyze_mode(model: SwitchedDAE, mode_state: Any) -> ModeData:
 
 
 def rest_state(model: SwitchedDAE, mode_state: Any) -> np.ndarray:
-    """Consistent initial state with zero flows.
+    """Consistent initial state with zero flows and every tank at its initial level.
 
-    Takes v = 0 and evaluates the algebraic components from (10b) and (10c).
+    Takes v from the rest state (only tank levels are nonzero; without tanks v = 0)
+    and evaluates the algebraic components from (10b) and (10c).
     """
     D = analyze_mode(model, mode_state)
-    v = np.zeros(D.n1, dtype=float)
+    v = D.Tinv[:D.n1, :] @ model.initial_state()
     w1 = -D.f1w
     xi = model.M @ (D.Tv @ v + D.T1w @ w1) if D.n1 > 0 else model.M @ (D.T1w @ w1)
     w2 = -(D.f2w + D.N2w @ model.friction(xi))

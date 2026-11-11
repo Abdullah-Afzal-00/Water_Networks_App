@@ -33,6 +33,8 @@ from core.examples import (
     example_paper_network,
     specimen_network,
     specimen_physics,
+    tank_specimen_network,
+    tank_specimen_scenario,
 )
 from core.io import load_project_full, save_project
 from core.params import missing_parameters
@@ -130,6 +132,12 @@ with st.sidebar:
         replace_network(specimen, positions, name="Specimen")
         apply_physics(specimen_physics())
         load_specimen_scenario()
+    if st.button("Tank network for EPANET", width="stretch", key="load_tank_specimen"):
+        tank_net, positions = tank_specimen_network()
+        replace_network(tank_net, positions, name="Tank specimen")
+        apply_physics(specimen_physics())
+        st.session_state.preset_choice = "Custom"
+        store_scenario(tank_specimen_scenario(3))
 
     upload = st.file_uploader("Open a .wnet file", type=["wnet", "json"])
     if upload is not None:

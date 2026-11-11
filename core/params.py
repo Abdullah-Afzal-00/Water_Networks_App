@@ -6,6 +6,7 @@ Units:
 - Pipe roughness: metres (m) [absolute surface roughness]
 - Node elevation: metres (m)
 - Reservoir total head: metres (m)
+- Tank area: square metres (m^2); tank initial level: metres (m)
 """
 
 from __future__ import annotations
@@ -21,6 +22,7 @@ def missing_parameters(network: Union[Network, dict]) -> List[str]:
     - Every pipe needs length, diameter, and roughness.
     - Every reservoir needs head and elevation.
     - Every junction needs elevation.
+    - Every tank needs elevation, area, and initial level.
 
     Returns
     -------
@@ -50,5 +52,12 @@ def missing_parameters(network: Union[Network, dict]) -> List[str]:
         elif node.type == "junction":
             if node.elevation is None:
                 missing.append(f"Junction {node.id}: elevation is not set")
+        elif node.type == "tank":
+            if node.elevation is None:
+                missing.append(f"Tank {node.id}: elevation is not set")
+            if node.area is None:
+                missing.append(f"Tank {node.id}: area is not set")
+            if node.init_level is None:
+                missing.append(f"Tank {node.id}: initial level is not set")
 
     return missing

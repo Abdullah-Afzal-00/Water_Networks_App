@@ -215,7 +215,11 @@
       if (!node) return "";
       var lines = [node.id + "  " + node.type, "Elevation: " + fmt(node.elevation, "m")];
       if (node.type === "reservoir") lines.push("Head: " + fmt(node.head, "m"));
-      if (node.type === "tank") lines.push("Capacity: " + fmt(node.capacity, "m³"));
+      if (node.type === "tank") {
+        lines.push("Area: " + fmt(node.area, "m²"));
+        lines.push("Initial level: " + fmt(node.init_level, "m"));
+        lines.push("Capacity: " + fmt(node.capacity, "m³"));
+      }
       return lines.join("\n");
     }
     var pipe = null;

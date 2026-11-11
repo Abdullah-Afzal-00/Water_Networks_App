@@ -20,18 +20,24 @@ def default_states(result: ComparisonResult) -> List[str]:
     For the 2-pipe specimen network: returns the MATLAB reference 5 states in order:
     ['Pipe_1_Flow', 'Pipe_2_Flow', 'Pipe_1_R', 'Pipe_2_L', 'Pipe_2_R'].
 
-    For other networks: all flow states first, then pressure states of pipe ends
-    that carry an impulse or sit next to a valve, up to 6 panels, with the rest
-    accessible via the selector.
+    With a tank the 2-pipe network is MATLAB's switchedDAE4 one, whose figure
+    shows Q1, the tank level, and the three pipe-end heads.
+
+    For other networks: all flow states first, then tank levels, then pressure
+    states of pipe ends that carry an impulse or sit next to a valve, up to 6
+    panels (tank levels always kept), with the rest accessible via the selector.
     """
     labels = list(result.dae.labels)
     matlab_five = ["Pipe_1_Flow", "Pipe_2_Flow", "Pipe_1_R", "Pipe_2_L", "Pipe_2_R"]
+    tanks = [n.id for n in result.snapshot.nodes if n.type == "tank" and n.id in labels]
 
     # Check if network is the specimen network (2 pipes, has all 5 matlab states)
     if (
         len(result.snapshot.pipes) == 2
         and all(s in labels for s in matlab_five)
     ):
+        if tanks:
+            return ["Pipe_1_Flow"] + tanks + ["Pipe_1_R", "Pipe_2_L", "Pipe_2_R"]
         return list(matlab_five)
 
     # Generic networks
@@ -52,14 +58,15 @@ def default_states(result: ComparisonResult) -> List[str]:
             valved_ends.add(r_lbl)
 
     for lbl in labels:
-        if lbl in flows:
+        if lbl in flows or lbl in tanks:
             continue
         if lbl in valved_ends:
             valved_or_impulse_pressures.append(lbl)
 
-    selected = flows + [p for p in valved_or_impulse_pressures if p not in flows]
+    flows = flows[: max(6 - len(tanks), 1)]
+    selected = flows + tanks + [p for p in valved_or_impulse_pressures if p not in flows]
     if len(selected) > 6:
-        selected = selected[:6]
+        selected = selected[: max(6, len(flows) + len(tanks))]
     elif len(selected) < 6:
         remaining = [lbl for lbl in labels if lbl not in selected]
         selected.extend(remaining[: 6 - len(selected)])

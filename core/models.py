@@ -39,6 +39,8 @@ def _validate_node_fields(
     capacity: Any,
     elevation: Any,
     head: Any,
+    area: Any = None,
+    init_level: Any = None,
 ) -> None:
     c = _check_finite_number("capacity", capacity)
     if c is not None and c < 0:
@@ -49,6 +51,18 @@ def _validate_node_fields(
     h = _check_finite_number("head", head)
     if h is not None and node_type != "reservoir":
         raise ValueError(f"head is only allowed on reservoirs, not on {node_type!r}")
+
+    a = _check_finite_number("area", area)
+    if a is not None and node_type != "tank":
+        raise ValueError(f"area is only allowed on tanks, not on {node_type!r}")
+    if a is not None and a <= 0:
+        raise ValueError(f"area must be > 0, got {a}")
+
+    lvl = _check_finite_number("init_level", init_level)
+    if lvl is not None and node_type != "tank":
+        raise ValueError(f"init_level is only allowed on tanks, not on {node_type!r}")
+    if lvl is not None and lvl < 0:
+        raise ValueError(f"init_level must be >= 0, got {lvl}")
 
 
 def _validate_pipe_fields(
@@ -100,6 +114,10 @@ class Node:
     capacity: Optional[float] = 1000.0
     elevation: Optional[float] = 50.0
     head: Optional[float] = None
+    # Tanks only: water surface area A_t (m^2) and the level at t = 0 (m above
+    # the tank bottom, i.e. the pressure head there).
+    area: Optional[float] = None
+    init_level: Optional[float] = None
 
     _VALID_TYPES = frozenset({"junction", "tank", "reservoir"})
 
@@ -108,7 +126,9 @@ class Node:
             raise ValueError(
                 f"Node type must be one of {sorted(self._VALID_TYPES)}, got {self.type!r}"
             )
-        _validate_node_fields(self.type, self.capacity, self.elevation, self.head)
+        _validate_node_fields(
+            self.type, self.capacity, self.elevation, self.head, self.area, self.init_level
+        )
 
 
 @dataclass
@@ -205,6 +225,8 @@ class Network:
         capacity: Optional[float] = 1000.0,
         elevation: Optional[float] = None,
         head: Optional[float] = None,
+        area: Optional[float] = None,
+        init_level: Optional[float] = None,
     ) -> Node:
         """Add a node and return it."""
         prefix_map = {"junction": "J", "tank": "T", "reservoir": "R"}
@@ -214,7 +236,7 @@ class Network:
                 f"Node type must be one of {sorted(prefix_map)}, got {type!r}"
             )
 
-        _validate_node_fields(type, capacity, elevation, head)
+        _validate_node_fields(type, capacity, elevation, head, area, init_level)
 
         if id is None:
             id = self._next_id(prefix)
@@ -223,7 +245,10 @@ class Network:
         else:
             self._bump_counter(id)
 
-        node = Node(id=id, type=type, capacity=capacity, elevation=elevation, head=head)
+        node = Node(
+            id=id, type=type, capacity=capacity, elevation=elevation, head=head,
+            area=area, init_level=init_level,
+        )
         self._nodes.append(node)
         return node
 
@@ -285,29 +310,25 @@ class Network:
     def update_node(self, node_id: str, **fields: Any) -> Node:
         """Update properties of an existing node.
 
-        Allowed fields: 'elevation', 'capacity', 'head'.
+        Allowed fields: 'elevation', 'capacity', 'head', 'area', 'init_level'.
         """
         node = next((n for n in self._nodes if n.id == node_id), None)
         if node is None:
             raise ValueError(f"Unknown node ID: {node_id!r}")
 
-        allowed = {"elevation", "capacity", "head"}
+        allowed = {"elevation", "capacity", "head", "area", "init_level"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"Unknown field(s) for node: {sorted(unknown)}")
 
-        new_capacity = fields["capacity"] if "capacity" in fields else node.capacity
-        new_elevation = fields["elevation"] if "elevation" in fields else node.elevation
-        new_head = fields["head"] if "head" in fields else node.head
+        merged = {name: fields.get(name, getattr(node, name)) for name in allowed}
+        _validate_node_fields(
+            node.type, merged["capacity"], merged["elevation"], merged["head"],
+            merged["area"], merged["init_level"],
+        )
 
-        _validate_node_fields(node.type, new_capacity, new_elevation, new_head)
-
-        if "capacity" in fields:
-            node.capacity = new_capacity
-        if "elevation" in fields:
-            node.elevation = new_elevation
-        if "head" in fields:
-            node.head = new_head
+        for name in fields:
+            setattr(node, name, merged[name])
         return node
 
     def update_pipe(self, pipe_id: str, **fields: Any) -> Pipe:
@@ -419,6 +440,7 @@ class Network:
                     "capacity": n.capacity,
                     "elevation": n.elevation,
                     "head": n.head,
+                    **({"area": n.area, "init_level": n.init_level} if n.type == "tank" else {}),
                 }
                 for n in self._nodes
             ],
@@ -437,6 +459,8 @@ class Network:
                 capacity=nd.get("capacity", 1000.0),
                 elevation=nd.get("elevation", None),
                 head=nd.get("head", None),
+                area=nd.get("area", None),
+                init_level=nd.get("init_level", None),
             )
         for pd_ in data.get("pipes", []):
             net.add_pipe(

@@ -287,12 +287,12 @@ def test_check_supported_reasons():
     assert len(reasons_pump) > 0
     assert any("Pumps are not supported" in r for r in reasons_pump)
 
-    # 3. Network with tank gives readable reason
+    # 3. Tanks are supported, but need an area and an initial level
     net_tank = _build_specimen_network()
     net_tank.add_node("tank", id="T1", elevation=10.0, capacity=1000.0)
     reasons_tank = check_supported(net_tank)
-    assert len(reasons_tank) > 0
-    assert any("Tanks are not supported" in r for r in reasons_tank)
+    assert any("Tank T1: area is not set" in r for r in reasons_tank)
+    assert any("Tank T1: initial level is not set" in r for r in reasons_tank)
 
     # 4. Network with missing parameters gives readable reason
     net_missing = _build_specimen_network()

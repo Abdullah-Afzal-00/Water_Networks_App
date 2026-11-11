@@ -15,6 +15,7 @@ from core.examples import (
     example_broken_network,
 )
 from core.io import save_project, load_project_full
+from core.params import missing_parameters
 from core.comparison import (
     problems,
     parameters_table,
@@ -84,12 +85,13 @@ def test_comparison_problems():
     p_empty = problems(empty_net, None)
     assert any("empty" in p.lower() for p in p_empty)
 
-    # 2. Paper network (pumps, tanks, missing parameters)
+    # 2. Paper network (pumps, missing parameters; its tank lacks an area and level)
     paper_net = example_paper_network()
     p_paper = problems(paper_net, None)
     assert any("pump" in p.lower() for p in p_paper)
-    assert any("tank" in p.lower() for p in p_paper)
+    assert not any("tanks are not supported" in p.lower() for p in p_paper)
     assert any("missing physical parameters" in p.lower() for p in p_paper)
+    assert "Tank T1: area is not set" in missing_parameters(paper_net)
 
     # 3. Specimen network without scenario
     spec_net, _ = specimen_network()

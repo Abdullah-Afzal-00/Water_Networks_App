@@ -133,6 +133,8 @@ def _canvas_spec(network: Network) -> dict:
                 "elevation": node.elevation,
                 "head": node.head,
                 "capacity": node.capacity,
+                "area": node.area,
+                "init_level": node.init_level,
             }
             for node in network.nodes
         ],
@@ -208,7 +210,9 @@ def render_network() -> None:
                 "Type": node.type,
                 "Elevation (m)": node.elevation,
                 "Head (m)": node.head,
-                "Capacity": node.capacity,
+                "Capacity (m³)": node.capacity,
+                "Tank area (m²)": node.area,
+                "Initial level (m)": node.init_level,
             }
             for node in network.nodes
         ]
@@ -266,9 +270,14 @@ def _add_forms(network: Network) -> None:
             node_id = st.text_input("ID", placeholder="Leave blank to number it automatically")
             elevation = st.text_input("Elevation (m)", placeholder="blank = not set")
             head = st.text_input("Reservoir head (m)", placeholder="reservoirs only; blank = not set")
-            capacity = st.text_input("Tank capacity", placeholder="blank = 1000")
+            area = st.text_input("Tank area (m²)", placeholder="tanks only; blank = not set")
+            init_level = st.text_input("Tank initial level (m)", placeholder="tanks only; blank = not set")
+            capacity = st.text_input(
+                "Tank capacity (m³)", placeholder="tanks only; blank = 1000",
+                help="Sets the tank wall height for EPANET: maximum level = capacity / area.",
+            )
             if st.form_submit_button("Add node"):
-                _commit_new_node(network, node_type, node_id, elevation, head, capacity)
+                _commit_new_node(network, node_type, node_id, elevation, head, capacity, area, init_level)
 
     with st.expander("Add pipe", expanded=False):
         node_ids = [node.id for node in network.nodes]
@@ -293,7 +302,7 @@ def _add_forms(network: Network) -> None:
                     )
 
 
-def _commit_new_node(network, node_type, node_id, elevation, head, capacity) -> None:
+def _commit_new_node(network, node_type, node_id, elevation, head, capacity, area, init_level) -> None:
     try:
         kwargs = {}
         if node_id.strip():
@@ -304,6 +313,8 @@ def _commit_new_node(network, node_type, node_id, elevation, head, capacity) -> 
         if node_type == "tank":
             parsed = parse_optional_number(capacity, "Capacity", minimum=0)
             cap_value = 1000.0 if parsed is None else parsed
+            kwargs["area"] = parse_optional_number(area, "Tank area", exclusive_min=0)
+            kwargs["init_level"] = parse_optional_number(init_level, "Initial level", minimum=0)
         network.add_node(node_type, elevation=elev_value, head=head_value, capacity=cap_value, **kwargs)
         sync_layout()
         st.session_state.fit_token = int(st.session_state.fit_token) + 1
@@ -347,10 +358,17 @@ def _selection_editor(network: Network) -> None:
             elevation = st.text_input("Elevation (m)", value=format_optional(node.elevation))
             head = None
             capacity = None
+            area = None
+            init_level = None
             if node.type == "reservoir":
                 head = st.text_input("Head (m)", value=format_optional(node.head))
             if node.type == "tank":
-                capacity = st.text_input("Capacity", value=format_optional(node.capacity))
+                area = st.text_input("Tank area (m²)", value=format_optional(node.area))
+                init_level = st.text_input("Initial level (m)", value=format_optional(node.init_level))
+                capacity = st.text_input(
+                    "Capacity (m³)", value=format_optional(node.capacity),
+                    help="Sets the tank wall height for EPANET: maximum level = capacity / area.",
+                )
             apply = st.form_submit_button("Apply")
         if apply:
             try:
@@ -360,6 +378,8 @@ def _selection_editor(network: Network) -> None:
                 if node.type == "tank":
                     parsed = parse_optional_number(capacity or "", "Capacity", minimum=0)
                     fields["capacity"] = 1000.0 if parsed is None else parsed
+                    fields["area"] = parse_optional_number(area or "", "Tank area", exclusive_min=0)
+                    fields["init_level"] = parse_optional_number(init_level or "", "Initial level", minimum=0)
                 network.update_node(node.id, **fields)
                 st.rerun()
             except ValueError as exc:
@@ -665,8 +685,8 @@ def render_comparison() -> None:
     with st.expander("How to compare with EPANET", expanded=False):
         st.markdown(
             """
-1. Fill elevation, reservoir head, length, diameter, and roughness. Leave a field blank only when it is unknown.
-2. Tick a valve at the start or end of a pipe. Pumps and tanks cannot be compared.
+1. Fill elevation, reservoir head, tank area and initial level, length, diameter, and roughness. Leave a field blank only when it is unknown.
+2. Tick a valve at the start or end of a pipe. Pumps cannot be compared.
 3. Choose a MATLAB specimen or write switch times in whole seconds.
 4. Run the comparison.
 5. Read the plots, the difference table, the equilibrium of each valve mode, and any Dirac impulses.

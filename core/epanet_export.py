@@ -18,6 +18,10 @@ from core.scenario import Scenario, ValveId, Mode
 from core.dae_model import check_supported, build_switched_dae, UnsupportedNetworkError
 
 
+TANK_FLOOR_DROP = 1.0
+"""Metres the EPANET tank floor is placed below the real tank bottom (see export_epanet)."""
+
+
 class ScenarioError(ValueError):
     """Raised when a scenario has invalid valve timings or settings for EPANET."""
     pass
@@ -134,6 +138,7 @@ def export_epanet(
     # Section accumulators
     junction_lines: List[str] = []
     reservoir_lines: List[str] = []
+    tank_lines: List[str] = []
     pipe_lines: List[str] = []
     valve_lines: List[str] = []
     status_lines: List[str] = []
@@ -167,6 +172,47 @@ def export_epanet(
         export_map.state_to_id[rnode.id] = r_junction_id
         export_map.state_to_type[rnode.id] = "node"
 
+    # Map each tank to its EPANET tank ID and the junction in front of it
+    # (a valve may not join a tank directly, so a 1 cm connector sits between,
+    # as in MATLAB writeInp4).
+    tank_epanet_id: Dict[str, str] = {}
+    tank_node_id: Dict[str, str] = {}
+
+    for tnode in dae.tanks:
+        area = float(tnode.area)
+        t_id = claim_node_id(f"TANK_{tnode.id}")
+        t_elev = float(tnode.elevation or 0.0)
+        init_lvl = float(tnode.init_level or 0.0)
+        # The tank wall height comes from its capacity (volume / area). EPANET
+        # stops filling at MaxLvl, so it must never sit below the start level.
+        max_lvl = float(tnode.capacity) / area if tnode.capacity else 1000.0
+        max_lvl = max(max_lvl, init_lvl + 1.0)
+        diam_m = math.sqrt(4.0 * area / math.pi)
+        # EPANET 2.3 never fills a tank that starts exactly at its minimum
+        # level, so the EPANET tank floor sits TANK_FLOOR_DROP below the real
+        # bottom: same heads (elevation + level), and the level is read at the
+        # tank's junction, which keeps the real elevation.
+        tank_lines.append(
+            f" {t_id:<8s} {t_elev - TANK_FLOOR_DROP:.6f}   {init_lvl + TANK_FLOOR_DROP:.6f}   0   "
+            f"{max_lvl + TANK_FLOOR_DROP:.6f}   {diam_m:.8f}   0"
+        )
+        tank_epanet_id[tnode.id] = t_id
+
+        t_junction_id = claim_node_id(f"{tnode.id}_node")
+        junction_lines.append(f" {t_junction_id:<8s} {t_elev:.6f}   0")
+        tank_node_id[tnode.id] = t_junction_id
+
+        c_pipe_id = claim_link_id(f"C_{tnode.id}")
+        pipe_roughness_mm = (dae.pipes[0].roughness or 0.000359) * 1000.0
+        pipe_lines.append(
+            f" {c_pipe_id:<8s} {t_junction_id:<8s} {t_id:<8s} 0.010000   5000.000000   {pipe_roughness_mm:.6f}   0   Open"
+        )
+
+        # Pressure at this junction (real tank elevation) is the tank level,
+        # the DAE tank state
+        export_map.state_to_id[tnode.id] = t_junction_id
+        export_map.state_to_type[tnode.id] = "node"
+
     # User junctions
     junc_epanet_id: Dict[str, str] = {}
     for jnode in dae.junctions:
@@ -181,6 +227,8 @@ def export_epanet(
     def get_boundary_junction(node_id: str) -> str:
         if node_id in res_node_id:
             return res_node_id[node_id]
+        if node_id in tank_node_id:
+            return tank_node_id[node_id]
         return junc_epanet_id[node_id]
 
     # Process pipes and their valves
@@ -289,6 +337,12 @@ def export_epanet(
         coord_lines.append(f" {r_id:<12s} {base_x - 30.0:.2f}   {base_y:.2f}")
         coord_lines.append(f" {r_junc:<12s} {base_x:.2f}   {base_y:.2f}")
 
+    # Write tanks and their junctions
+    for tnode in dae.tanks:
+        base_x, base_y = assigned_coords[tnode.id]
+        coord_lines.append(f" {tank_epanet_id[tnode.id]:<12s} {base_x + 30.0:.2f}   {base_y:.2f}")
+        coord_lines.append(f" {tank_node_id[tnode.id]:<12s} {base_x:.2f}   {base_y:.2f}")
+
     # Write user junctions
     for jnode in dae.junctions:
         base_x, base_y = assigned_coords[jnode.id]
@@ -322,6 +376,10 @@ def export_epanet(
         "[RESERVOIRS]",
         ";ID       Head(m)",
         *reservoir_lines,
+        "",
+        "[TANKS]",
+        ";ID       Elev(m)    InitLvl    MinLvl  MaxLvl     Diam(m)      MinVol",
+        *tank_lines,
         "",
         "[PIPES]",
         ";ID       From     To       Length(m)    Diam(mm)     Rough(mm)    MinorLoss   Status",

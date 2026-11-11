@@ -248,7 +248,7 @@ def run_epanet(
     Raises
     ------
     UnsupportedNetworkError
-        If network contains pumps or tanks.
+        If network contains pumps.
     ScenarioError
         If scenario contains invalid switch times or valve configurations.
     EpanetError

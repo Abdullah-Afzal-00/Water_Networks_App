@@ -45,9 +45,9 @@ def check_supported(network: Union[Network, dict]) -> List[str]:
     Rules
     -----
     - Pumps are not supported in the numeric DAE model.
-    - Tanks are not supported in the numeric DAE model.
-    - Missing physical parameters (length, diameter, roughness, elevation, head) are not allowed.
-    - At least one reservoir must be present.
+    - Missing physical parameters (length, diameter, roughness, elevation, head,
+      tank area and initial level) are not allowed.
+    - At least one reservoir or tank must be present.
     - Network validation warnings that make the network unsolvable (unsupplied components,
       isolated nodes) are rejected.
 
@@ -69,24 +69,17 @@ def check_supported(network: Union[Network, dict]) -> List[str]:
             f"Pumps are not supported in the numeric DAE model (found: {', '.join(pumps)})."
         )
 
-    # 2. Tanks
-    tanks = [n.id for n in network.nodes if n.type == "tank"]
-    if tanks:
-        reasons.append(
-            f"Tanks are not supported in the numeric DAE model (found: {', '.join(tanks)})."
-        )
+    # 2. Supply presence: a reservoir or a tank fixes the heads
+    supplies = [n.id for n in network.nodes if n.type in ("reservoir", "tank")]
+    if not supplies:
+        reasons.append("Network must contain at least one reservoir or tank.")
 
-    # 3. Reservoir presence
-    reservoirs = [n.id for n in network.nodes if n.type == "reservoir"]
-    if not reservoirs:
-        reasons.append("Network must contain at least one reservoir.")
-
-    # 4. Missing physical parameters
+    # 3. Missing physical parameters
     missing = missing_parameters(network)
     if missing:
         reasons.extend(missing)
 
-    # 5. Topological unsolvability from validate_network
+    # 4. Topological unsolvability from validate_network
     topo_warnings = validate_network(network)
     for w in topo_warnings:
         if "not connected to any supply" in w or "Isolated node" in w:
@@ -104,6 +97,7 @@ class SwitchedDAE:
         2*N_p .. 3*N_p - 1: right pressures P_r_i
         3*N_p .. 3*N_p + N_j - 1: junction pressures P_J
         .. + N_r - 1: reservoir pressures P_R
+        .. + N_t - 1: tank levels (pressure head at the tank), differential states
     """
 
     def __init__(self, network: Network, settings: PhysicsSettings) -> None:
@@ -113,17 +107,20 @@ class SwitchedDAE:
         self.pipes: List[Pipe] = list(network.pipes)
         self.junctions: List[Node] = [n for n in network.nodes if n.type == "junction"]
         self.reservoirs: List[Node] = [n for n in network.nodes if n.type == "reservoir"]
+        self.tanks: List[Node] = [n for n in network.nodes if n.type == "tank"]
 
         self.N_p = len(self.pipes)
         self.N_j = len(self.junctions)
         self.N_r = len(self.reservoirs)
-        self.K = 3 * self.N_p + self.N_j + self.N_r
+        self.N_t = len(self.tanks)
+        self.K = 3 * self.N_p + self.N_j + self.N_r + self.N_t
 
         # Index offsets
         self.pl_offset = self.N_p
         self.pr_offset = 2 * self.N_p
         self.j_offset = 3 * self.N_p
         self.r_offset = self.j_offset + self.N_j
+        self.t_offset = self.r_offset + self.N_r
 
         self.pipe_col: Dict[str, int] = {p.id: i for i, p in enumerate(self.pipes)}
         self.pl_col: Dict[str, int] = {p.id: self.pl_offset + i for i, p in enumerate(self.pipes)}
@@ -133,6 +130,8 @@ class SwitchedDAE:
             self.node_col[j.id] = self.j_offset + i
         for i, r in enumerate(self.reservoirs):
             self.node_col[r.id] = self.r_offset + i
+        for i, t in enumerate(self.tanks):
+            self.node_col[t.id] = self.t_offset + i
 
         self.node_map: Dict[str, Node] = {n.id: n for n in network.nodes}
 
@@ -148,6 +147,8 @@ class SwitchedDAE:
             self.labels.append(j.id)
         for r in self.reservoirs:
             self.labels.append(r.id)
+        for t in self.tanks:
+            self.labels.append(t.id)
 
         # Elevation per state (np.nan for flows)
         elev = np.full(self.K, np.nan, dtype=float)
@@ -158,6 +159,8 @@ class SwitchedDAE:
             elev[self.j_offset + i] = float(j.elevation or 0.0)
         for i, r in enumerate(self.reservoirs):
             elev[self.r_offset + i] = float(r.elevation or 0.0)
+        for i, t in enumerate(self.tanks):
+            elev[self.t_offset + i] = float(t.elevation or 0.0)
         self._elevation = elev
 
         # Valves present in network
@@ -277,7 +280,29 @@ class SwitchedDAE:
             elev = float(rnode.elevation or 0.0)
             f[row] = -(head - elev)
 
+        # 6. Tank rows (3*N_p + N_j + N_r ..): level' = (inflow - outflow) / A_t
+        for t_idx, tnode in enumerate(self.tanks):
+            row = self.t_offset + t_idx
+            E[row, row] = 1.0
+            inv_area = 1.0 / float(tnode.area)
+            for pipe in self.pipes:
+                if pipe.end == tnode.id:
+                    A[row, self.pipe_col[pipe.id]] += inv_area
+                if pipe.start == tnode.id:
+                    A[row, self.pipe_col[pipe.id]] -= inv_area
+
         return E, A, f
+
+    def initial_state(self) -> np.ndarray:
+        """State at t = 0 before any switch: water at rest, every tank at its initial level.
+
+        Only the tank levels matter: they are the differential states that are
+        not fixed by the flows, so they have to be given (as in MATLAB restState).
+        """
+        x = np.zeros(self.K, dtype=float)
+        for t_idx, tnode in enumerate(self.tanks):
+            x[self.t_offset + t_idx] = float(tnode.init_level or 0.0)
+        return x
 
     def friction(self, Q: np.ndarray) -> np.ndarray:
         """Compute Darcy friction vector gbar(Q) for pipe flows Q."""
@@ -431,8 +456,26 @@ def steady_state(model: SwitchedDAE, mode: Optional[Union[Dict[Any, int], Mode]]
     default_p = float(np.mean(res_heads)) if res_heads else 30.0
     x[N_p:] = default_p
 
+    for t_idx, tnode in enumerate(model.tanks):
+        x[model.t_offset + t_idx] = float(tnode.init_level or default_p)
+
     max_iter = 100
     tol = 1e-11
+
+    def _unique(x_sol: np.ndarray) -> np.ndarray:
+        # With tanks a mode can leave a level free (a tank cut off by a shut
+        # valve keeps whatever level it had), so its equilibrium is not unique.
+        J_sol = A.copy()
+        xi_sol = M @ x_sol
+        for i in range(N_p):
+            dq = 1e-7
+            xp, xm = xi_sol.copy(), xi_sol.copy()
+            xp[i] += dq
+            xm[i] -= dq
+            J_sol[i, i] += (model.friction(xp)[i] - model.friction(xm)[i]) / (2.0 * dq)
+        if np.linalg.matrix_rank(J_sol) < model.K:
+            raise ValueError("The equilibrium of this mode is not unique.")
+        return x_sol
 
     for it in range(max_iter):
         xi = M @ x
@@ -440,7 +483,7 @@ def steady_state(model: SwitchedDAE, mode: Optional[Union[Dict[Any, int], Mode]]
         res = A @ x + N @ g_val + f
 
         if float(np.max(np.abs(res))) < tol:
-            return x
+            return _unique(x)
 
         # Build Jacobian J = A + N * d(gbar)/dQ * M via numerical finite difference
         h = 1e-7
@@ -466,14 +509,14 @@ def steady_state(model: SwitchedDAE, mode: Optional[Union[Dict[Any, int], Mode]]
             g_val = model.friction(xi)
             res = A @ x + N @ g_val + f
             if float(np.max(np.abs(res))) < 1e-8:
-                return x
+                return _unique(x)
 
     # Final residual check
     xi = M @ x
     g_val = model.friction(xi)
     res = A @ x + N @ g_val + f
     if float(np.max(np.abs(res))) < 1e-8:
-        return x
+        return _unique(x)
 
     raise RuntimeError(
         f"Newton iteration did not converge for steady state after {max_iter} iterations "

@@ -143,17 +143,11 @@ def problems(
         prob_list.append("Network is empty. Add reservoirs, junctions, and pipes to model a network.")
         return prob_list
 
-    # 2. Unsupported element types: pumps and tanks
+    # 2. Unsupported element types: pumps
     pump_pipes = [p.id for p in network.pipes if p.has_pump]
     if pump_pipes:
         prob_list.append(
             f"Pumps are not supported for EPANET comparison (found pump pipes: {', '.join(pump_pipes)})."
-        )
-
-    tanks = [n.id for n in network.nodes if n.type == "tank"]
-    if tanks:
-        prob_list.append(
-            f"Tanks are not supported for EPANET comparison (found tanks: {', '.join(tanks)})."
         )
 
     # 3. Missing physical parameters
@@ -166,10 +160,10 @@ def problems(
             f"Missing physical parameters ({count}): {'; '.join(sample)}{suffix}."
         )
 
-    # 4. Reservoir check (need at least one supply/head boundary)
-    reservoirs = [n.id for n in network.nodes if n.type == "reservoir"]
-    if not reservoirs:
-        prob_list.append("Network has no reservoir. At least one reservoir is required for boundary head.")
+    # 4. Supply check (a reservoir or a tank gives the boundary head)
+    supplies = [n.id for n in network.nodes if n.type in ("reservoir", "tank")]
+    if not supplies:
+        prob_list.append("Network has no reservoir or tank. At least one is required for boundary head.")
 
     # 5. Graph connectivity / isolated nodes
     structural_warnings = validate_network(network)
@@ -215,7 +209,7 @@ def problems(
                 prob_list.append(f"Scenario event references valve '{ev_str}', which is not in network.")
 
         # Check scenario solvability via DAE builder if network has no missing params
-        if not missing and not pump_pipes and not tanks and reservoirs and not structural_warnings:
+        if not missing and not pump_pipes and supplies and not structural_warnings:
             try:
                 ps = settings if settings is not None else PhysicsSettings()
                 dae = build_switched_dae(network, ps)
@@ -338,7 +332,9 @@ def run_comparison(
         try:
             x_eq = steady_state(dae, m.state)
         except Exception:
-            x_eq = np.zeros(dae.K, dtype=float)
+            # No unique equilibrium (e.g. a tank cut off by a shut valve keeps
+            # whatever level it had), so leave the column blank, not zero.
+            x_eq = np.full(dae.K, np.nan, dtype=float)
 
         # Sampling instant:
         # For DAE: the last sample of the interval before the next switch.
