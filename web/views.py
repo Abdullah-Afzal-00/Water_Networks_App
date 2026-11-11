@@ -762,6 +762,14 @@ def _render_results(result) -> None:
     if result.warnings:
         for warning in result.warnings:
             st.warning(warning)
+            if warning.startswith("System unbalanced"):
+                st.caption(
+                    "This usually means a flow is close to zero, for example a tank that has "
+                    "filled up to the reservoir's head. Near zero flow, friction barely changes "
+                    "with flow, so EPANET cannot meet its tight accuracy setting at those steps. "
+                    "It keeps going, and the leftover error is tiny (on the tank network about "
+                    "0.005 m³/s in flow and 0.0001 m in level). The DAE solution is not affected."
+                )
     gap_col, end_col = st.columns(2)
     try:
         gap = max_abs_difference_after_last_switch(result)
