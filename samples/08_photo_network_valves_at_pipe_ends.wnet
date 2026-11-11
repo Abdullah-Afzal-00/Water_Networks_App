@@ -1,0 +1,92 @@
+{
+  "format": "water-network",
+  "version": 2,
+  "nodes": [
+    {
+      "id": "R1",
+      "type": "reservoir",
+      "capacity": 1000.0,
+      "elevation": 20.0,
+      "head": 50.0
+    },
+    {
+      "id": "J1",
+      "type": "junction",
+      "capacity": 1000.0,
+      "elevation": 5.0,
+      "head": null
+    },
+    {
+      "id": "R2",
+      "type": "reservoir",
+      "capacity": 1000.0,
+      "elevation": 0.0,
+      "head": 46.0
+    }
+  ],
+  "pipes": [
+    {
+      "id": "P1",
+      "start": "R1",
+      "end": "J1",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 400.0,
+      "diameter": 0.4,
+      "roughness": 0.000359,
+      "valve_end": true
+    },
+    {
+      "id": "P2",
+      "start": "J1",
+      "end": "R2",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 250.0,
+      "diameter": 0.4,
+      "roughness": 0.000359,
+      "valve_end": true
+    }
+  ],
+  "counters": {
+    "J": 1,
+    "T": 0,
+    "R": 2,
+    "P": 2
+  },
+  "positions": {
+    "R1": [
+      0.6,
+      0.6
+    ],
+    "J1": [
+      -0.6,
+      -0.4
+    ],
+    "R2": [
+      0.8,
+      -0.4
+    ]
+  },
+  "scenario": {
+    "title": "Photo network: close the P1 valve at 60 s (started from rest)",
+    "initial": {
+      "P1:end": 1,
+      "P2:end": 1
+    },
+    "events": [
+      {
+        "time": 60.0,
+        "valve": "P1:end",
+        "state": 0
+      }
+    ],
+    "t_end": 120.0
+  },
+  "physics": {
+    "friction_mode": "constant",
+    "friction_factor": 0.02,
+    "nu": 1.0219e-06,
+    "g": 9.814560000000002
+  }
+}

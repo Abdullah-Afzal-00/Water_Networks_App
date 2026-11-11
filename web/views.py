@@ -26,6 +26,7 @@ from core.plotdata import (
     engine_label,
     impulse_arrows,
     max_abs_difference_after_last_switch,
+    max_abs_difference_at_end,
     series,
 )
 from core.scenario import Scenario, SwitchEvent, ValveId
@@ -741,9 +742,24 @@ def _render_results(result) -> None:
     if result.warnings:
         for warning in result.warnings:
             st.warning(warning)
+    gap_col, end_col = st.columns(2)
     try:
         gap = max_abs_difference_after_last_switch(result)
-        st.metric("Largest |DAE − EPANET| after the last switch", f"{gap:.3e}")
+        gap_col.metric(
+            "Largest |DAE − EPANET| after the last switch",
+            f"{gap:.3e}",
+            help="Includes the transient right after the switch, which EPANET does not model. "
+            "It can be large while the DAE flows are still settling.",
+        )
+    except Exception:
+        pass
+    try:
+        end_gap = max_abs_difference_at_end(result)
+        end_col.metric(
+            "|DAE − EPANET| at the end of the run",
+            f"{end_gap:.3e}",
+            help="Largest difference over all states at the final time, once the DAE has had time to settle.",
+        )
     except Exception:
         pass
 

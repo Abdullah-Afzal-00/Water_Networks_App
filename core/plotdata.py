@@ -330,6 +330,29 @@ def max_abs_difference_after_last_switch(result: ComparisonResult) -> float:
     return max_diff
 
 
+def max_abs_difference_at_end(result: ComparisonResult) -> float:
+    """Return maximum absolute difference across all states at EPANET's last report.
+
+    After a switch the DAE can still be relaxing (EPANET jumps straight to the
+    new steady state), so this shows how closely the two settle, while
+    max_abs_difference_after_last_switch also includes that transient.
+    """
+    tall, Xall = _strictly_increasing_dae_time_series(result)
+    te = result.epanet.t
+    if len(te) == 0:
+        return 0.0
+
+    t_end = float(te[-1])
+    max_diff = 0.0
+    for col in range(len(result.dae.labels)):
+        dae_val = float(np.interp(t_end, tall, Xall[:, col]))
+        diff = abs(dae_val - float(result.epanet.X[-1, col]))
+        if diff > max_diff:
+            max_diff = diff
+
+    return max_diff
+
+
 def impulse_arrows(
     result: ComparisonResult,
     labels: Optional[List[str]] = None,

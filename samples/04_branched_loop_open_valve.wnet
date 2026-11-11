@@ -1,0 +1,167 @@
+{
+  "format": "water-network",
+  "version": 2,
+  "nodes": [
+    {
+      "id": "R1",
+      "type": "reservoir",
+      "capacity": 1000.0,
+      "elevation": 30.0,
+      "head": 60.0
+    },
+    {
+      "id": "R2",
+      "type": "reservoir",
+      "capacity": 1000.0,
+      "elevation": 0.0,
+      "head": 40.0
+    },
+    {
+      "id": "R3",
+      "type": "reservoir",
+      "capacity": 1000.0,
+      "elevation": 5.0,
+      "head": 45.0
+    },
+    {
+      "id": "J1",
+      "type": "junction",
+      "capacity": 1000.0,
+      "elevation": 10.0,
+      "head": null
+    },
+    {
+      "id": "J2",
+      "type": "junction",
+      "capacity": 1000.0,
+      "elevation": 8.0,
+      "head": null
+    },
+    {
+      "id": "J3",
+      "type": "junction",
+      "capacity": 1000.0,
+      "elevation": 4.0,
+      "head": null
+    }
+  ],
+  "pipes": [
+    {
+      "id": "P1",
+      "start": "R1",
+      "end": "J1",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 500.0,
+      "diameter": 0.3,
+      "roughness": 0.000359
+    },
+    {
+      "id": "P2",
+      "start": "J1",
+      "end": "J2",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 300.0,
+      "diameter": 0.3,
+      "roughness": 0.000359,
+      "valve_start": true
+    },
+    {
+      "id": "P3",
+      "start": "J1",
+      "end": "J3",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 350.0,
+      "diameter": 0.3,
+      "roughness": 0.000359
+    },
+    {
+      "id": "P4",
+      "start": "J2",
+      "end": "J3",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 200.0,
+      "diameter": 0.3,
+      "roughness": 0.000359,
+      "valve_end": true
+    },
+    {
+      "id": "P5",
+      "start": "J3",
+      "end": "R2",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 400.0,
+      "diameter": 0.3,
+      "roughness": 0.000359
+    },
+    {
+      "id": "P6",
+      "start": "J2",
+      "end": "R3",
+      "has_pump": false,
+      "pump_power": 0.0,
+      "length": 250.0,
+      "diameter": 0.3,
+      "roughness": 0.000359,
+      "valve_end": true
+    }
+  ],
+  "counters": {
+    "J": 3,
+    "T": 0,
+    "R": 3,
+    "P": 6
+  },
+  "positions": {
+    "R1": [
+      -1.2,
+      0.0
+    ],
+    "J1": [
+      -0.5,
+      0.0
+    ],
+    "J2": [
+      0.2,
+      0.5
+    ],
+    "J3": [
+      0.2,
+      -0.5
+    ],
+    "R3": [
+      0.9,
+      0.5
+    ],
+    "R2": [
+      0.9,
+      -0.5
+    ]
+  },
+  "scenario": {
+    "title": "Branched loop: P6:end starts closed, opens at 150 s",
+    "initial": {
+      "P2:start": 1,
+      "P4:end": 1,
+      "P6:end": 0
+    },
+    "events": [
+      {
+        "time": 150.0,
+        "valve": "P6:end",
+        "state": 1
+      }
+    ],
+    "t_end": 400.0
+  },
+  "physics": {
+    "friction_mode": "constant",
+    "friction_factor": 0.02,
+    "nu": 1.0219e-06,
+    "g": 9.814560000000002
+  }
+}

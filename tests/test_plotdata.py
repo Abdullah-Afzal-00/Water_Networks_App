@@ -5,11 +5,15 @@ import numpy as np
 
 from core.examples import specimen_network, specimen_scenario, specimen_physics
 from core.comparison import run_comparison
+from core.models import Network
+from core.physics import PhysicsSettings
+from core.scenario import Scenario, SwitchEvent, ValveId
 from core.plotdata import (
     default_states,
     series,
     difference_rows,
     max_abs_difference_after_last_switch,
+    max_abs_difference_at_end,
     impulse_arrows,
     engine_label,
     decimate_series,
@@ -76,6 +80,32 @@ def test_difference_row_t0_and_last_switch(specimen_res_sc1):
     max_diff = max_abs_difference_after_last_switch(res)
     assert max_diff < 1e-4
     assert max_diff == pytest.approx(4.7e-9, abs=2e-9)
+
+    # The mode after the switch is purely algebraic, so the end gap is just as small
+    assert max_abs_difference_at_end(res) < 1e-4
+
+
+def test_end_gap_ignores_transient_after_switch():
+    # Branched loop: after the switch the flows still relax, which EPANET skips
+    net = Network()
+    net.add_node("reservoir", id="R1", elevation=30.0, head=60.0)
+    net.add_node("reservoir", id="R2", elevation=0.0, head=40.0)
+    net.add_node("reservoir", id="R3", elevation=5.0, head=45.0)
+    for jid, z in (("J1", 10.0), ("J2", 8.0), ("J3", 4.0)):
+        net.add_node("junction", id=jid, elevation=z)
+    pipe = dict(diameter=0.3, roughness=3.59e-4)
+    net.add_pipe("R1", "J1", id="P1", length=500.0, **pipe)
+    net.add_pipe("J1", "J2", id="P2", length=300.0, valve_start=True, **pipe)
+    net.add_pipe("J1", "J3", id="P3", length=350.0, **pipe)
+    net.add_pipe("J2", "J3", id="P4", length=200.0, **pipe)
+    net.add_pipe("J3", "R2", id="P5", length=400.0, **pipe)
+    net.add_pipe("J2", "R3", id="P6", length=250.0, **pipe)
+    valve = ValveId("P2", "start")
+    scenario = Scenario("close P2:start", {valve: 1}, [SwitchEvent(200.0, valve, 0)], 400.0)
+    res = run_comparison(net, scenario, PhysicsSettings(friction_mode="constant", friction_factor=0.02))
+
+    assert max_abs_difference_after_last_switch(res) > 1e-2
+    assert max_abs_difference_at_end(res) < 1e-3
 
 
 def test_total_head_offset(specimen_res_sc1):
